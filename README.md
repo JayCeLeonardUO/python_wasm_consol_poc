@@ -1,93 +1,46 @@
-# Python WASM Console (proof of concept)
+# CPython in the browser, built from source
 
-A single HTML file that gives you a real CPython REPL in the browser.
-The interpreter runs **client-side in WebAssembly** via [Pyodide](https://pyodide.org).
-There is no backend, no container, no Docker, nothing to provision.
+**Live:** https://jayceleonarduo.github.io/python_wasm_consol_poc/
 
-**Live demo:** https://jayceleonarduo.github.io/python_wasm_consol_poc/
-(served straight from this repo by GitHub Pages)
+This repo proves an interpreter can be deployed client-side with no server and no Docker.
+The page runs **stock CPython 3.14.8 compiled to WebAssembly with Emscripten 4.0.12**,
+straight from the CPython repo's own `Platforms/emscripten build` target. No Pyodide,
+no third-party runtime. `python.wasm`, its JS glue and a zipped standard library are
+committed here and served as static files by GitHub Pages. Every visitor runs their own
+interpreter on their own CPU.
 
-## Why
+## Use it
 
-The goal is to prove that an interpreter can be shipped as a static asset:
-host `index.html` anywhere that serves files (GitHub Pages, S3, nginx, a USB stick)
-and every visitor gets their own isolated Python interpreter running on their own CPU.
+- **Start REPL** gives an interactive `>>>` prompt that keeps state between lines.
+- **Run code** runs the editor contents as a script, like `python main.py`, prints, and exits.
+- Works in Chrome and Firefox. Nothing is sent anywhere after the files load.
 
-| Traditional "online Python" | This repo |
-|---|---|
-| Server runs the code | Browser runs the code |
-| Docker/Firecracker sandbox per user | Browser sandbox, zero infra |
-| Scales with your bill | Scales with the visitor's laptop |
-| Network round trip per statement | Local execution, no round trip |
+## Files
 
-## Run it
+| File | Size | What it is |
+|---|---|---|
+| `python.wasm` | 11.1 MB | the interpreter; all extension modules statically linked |
+| `python.mjs` | 572 KB | Emscripten glue: memory, virtual filesystem, TTY |
+| `python3.14.zip` | 3.8 MB | pyc-only standard library, written into the virtual FS at start |
+| `python.worker.mjs` | | runs the interpreter in a Web Worker; stdin blocks on a SharedArrayBuffer |
+| `index.html` | | the terminal page (from CPython's `web_example`, with a provenance note) |
+| `coi-serviceworker.js` | | adds the cross-origin isolation headers that GitHub Pages cannot send |
 
-Any static file server works:
+[BUILD.md](BUILD.md) has the exact source commit, toolchain versions and commands.
+
+## Run locally
 
 ```bash
 python3 -m http.server 8000
-# open http://localhost:8000
+# open http://localhost:8000/   (first load registers the service worker and reloads once)
 ```
-
-Opening `index.html` directly from disk (`file://`) also works in Chrome and Firefox,
-because the runtime is fetched from the jsDelivr CDN with permissive CORS headers.
-
-## What it does
-
-- Full REPL semantics using Pyodide's `PyodideConsole`: multi-line blocks, `...` continuation
-  prompts, syntax errors, tracebacks, and top-level `await`.
-- Streaming `stdout` / `stderr`, so `print(..., end="")` behaves correctly.
-- Command history (↑ / ↓), Tab inserts 4 spaces, Ctrl+L clears, Ctrl+C cancels the current input.
-- Packages load automatically on import (see below).
-
-## What can you import?
-
-Far more than the stdlib. Three tiers:
-
-**1. Prebuilt for WebAssembly (just `import` it).**
-Pyodide 0.28 ships 340+ packages compiled to wasm, including real C/Fortran extensions.
-The console scans each statement for imports and fetches what is missing from the CDN
-before running it. Highlights: numpy, scipy, pandas, **scikit-learn**, matplotlib,
-statsmodels, sympy, networkx, pillow, opencv, xgboost, lightgbm, scikit-image, shapely,
-lxml, beautifulsoup4, nltk, cryptography, pydantic, sqlalchemy, sqlite3, requests, bokeh,
-altair. Full list: https://pyodide.org/en/stable/usage/packages-in-pyodide.html
-
-```python
-from sklearn.datasets import load_iris
-from sklearn.linear_model import LogisticRegression
-X, y = load_iris(return_X_y=True)
-LogisticRegression(max_iter=500).fit(X, y).score(X, y)
-```
-
-The first `import sklearn` downloads about 23 MB (mostly scipy); the browser caches it
-after that. A link can arrive pre-warmed: `index.html?packages=scikit-learn,pandas`.
-
-**2. Any pure-Python package on PyPI (via micropip).**
-
-```python
-import micropip
-await micropip.install("seaborn")
-import seaborn
-```
-
-**3. Not possible (today).**
-torch, tensorflow, jax, numba, polars, pyarrow, duckdb, transformers, onnxruntime.
-These have native extensions nobody has built for wasm, or need things the browser
-sandbox does not offer: real threads / multiprocessing, raw sockets, subprocesses, a GPU.
-Memory tops out around 2–4 GB per tab.
-
-## Layout
-
-```
-index.html   the whole app: markup, styles, and ~150 lines of JS
-README.md
-```
-
-The runtime (~10 MB, cached by the browser after first visit) is loaded from
-`https://cdn.jsdelivr.net/pyodide/v0.28.3/full/`. To be fully offline, download that
-directory next to `index.html` and point `loadPyodide({ indexURL: "./pyodide/" })` at it.
 
 ## Deploying
 
-This repo is deployed with GitHub Pages, source = `main` branch, folder = `/`.
-Every push to `main` redeploys. That is the entire deployment pipeline.
+GitHub Pages, source = `main`, folder = `/`. Pushing to `main` is the whole pipeline.
+Do not put the `.wasm` in Git LFS: Pages does not serve LFS objects.
+
+## History
+
+The first iteration of this proof used Pyodide's prebuilt CPython from a CDN.
+It is preserved at the git tag `pyodide-poc`.
