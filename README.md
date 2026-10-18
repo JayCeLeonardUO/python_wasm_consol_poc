@@ -38,14 +38,43 @@ because the runtime is fetched from the jsDelivr CDN with permissive CORS header
   prompts, syntax errors, tracebacks, and top-level `await`.
 - Streaming `stdout` / `stderr`, so `print(..., end="")` behaves correctly.
 - Command history (↑ / ↓), Tab inserts 4 spaces, Ctrl+L clears, Ctrl+C cancels the current input.
-- Pure-Python packages install at runtime from PyPI:
+- Packages load automatically on import (see below).
 
-  ```python
-  import micropip
-  await micropip.install("requests")
-  ```
+## What can you import?
 
-  Pyodide also ships prebuilt wheels for numpy, pandas, scipy, matplotlib and more.
+Far more than the stdlib. Three tiers:
+
+**1. Prebuilt for WebAssembly (just `import` it).**
+Pyodide 0.28 ships 340+ packages compiled to wasm, including real C/Fortran extensions.
+The console scans each statement for imports and fetches what is missing from the CDN
+before running it. Highlights: numpy, scipy, pandas, **scikit-learn**, matplotlib,
+statsmodels, sympy, networkx, pillow, opencv, xgboost, lightgbm, scikit-image, shapely,
+lxml, beautifulsoup4, nltk, cryptography, pydantic, sqlalchemy, sqlite3, requests, bokeh,
+altair. Full list: https://pyodide.org/en/stable/usage/packages-in-pyodide.html
+
+```python
+from sklearn.datasets import load_iris
+from sklearn.linear_model import LogisticRegression
+X, y = load_iris(return_X_y=True)
+LogisticRegression(max_iter=500).fit(X, y).score(X, y)
+```
+
+The first `import sklearn` downloads about 23 MB (mostly scipy); the browser caches it
+after that. A link can arrive pre-warmed: `index.html?packages=scikit-learn,pandas`.
+
+**2. Any pure-Python package on PyPI (via micropip).**
+
+```python
+import micropip
+await micropip.install("seaborn")
+import seaborn
+```
+
+**3. Not possible (today).**
+torch, tensorflow, jax, numba, polars, pyarrow, duckdb, transformers, onnxruntime.
+These have native extensions nobody has built for wasm, or need things the browser
+sandbox does not offer: real threads / multiprocessing, raw sockets, subprocesses, a GPU.
+Memory tops out around 2–4 GB per tab.
 
 ## Layout
 

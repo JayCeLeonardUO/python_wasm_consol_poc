@@ -223,8 +223,22 @@ _await_fut
   pyver.textContent = `Pyodide ${pyodide.version} · CPython ${version} · wasm32`;
 
   write(banner, "info");
-  write("Everything you type runs in this tab. No network calls after load, no server, no Docker.", "info");
-  write("Try: import sys; sys.platform   |   await micropip.install('requests') after import micropip", "info");
+  write("Everything you type runs in this tab. No server, no Docker.", "info");
+  write("Prebuilt: import numpy, pandas, scipy, sklearn, matplotlib, sympy, ... (downloaded on first import, then cached)", "info");
+  write('Anything pure-Python on PyPI: import micropip; await micropip.install("seaborn")', "info");
+
+  // Optional warm start: index.html?packages=scikit-learn,pandas
+  const preload = (new URLSearchParams(location.search).get("packages") || "")
+    .split(",").map((x) => x.trim()).filter(Boolean);
+  if (preload.length) {
+    status.textContent = "Loading " + preload.join(", ") + "…";
+    try {
+      await pyodide.loadPackage(preload, { messageCallback: (m) => write(m, "info") });
+    } catch (e) {
+      write("Package preload failed: " + e, "stderr");
+    }
+    status.textContent = `Ready · Python ${version} · preloaded ${preload.join(", ")}`;
+  }
 
   input.disabled = false;
   input.focus();
@@ -253,6 +267,24 @@ _await_fut
     busy = true;
     input.disabled = true;
     try {
+      // Fetch any Pyodide-distributed packages the code imports (numpy, sklearn, ...)
+      // before running it. No-op for stdlib imports and packages already loaded.
+      if (/\b(import|from)\b/.test(code)) {
+        const prev = status.textContent;
+        try {
+          await pyodide.loadPackagesFromImports(code, {
+            messageCallback: (m) => {
+              if (/already loaded|No new packages/.test(m)) return;   // noise on repeat imports
+              status.textContent = m; write(m, "info");
+            },
+            errorCallback: (m) => write(m, "stderr"),
+          });
+        } catch (e) {
+          write("Package load failed: " + e, "stderr");
+        } finally {
+          status.textContent = prev;
+        }
+      }
       for (const ln of lines) {
         const fut = pyconsole.push(ln);
         const check = fut.syntax_check;
