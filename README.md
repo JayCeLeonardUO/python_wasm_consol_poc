@@ -4,6 +4,9 @@ A single HTML file that gives you a real CPython REPL in the browser.
 The interpreter runs **client-side in WebAssembly** via [Pyodide](https://pyodide.org).
 There is no backend, no container, no Docker, nothing to provision.
 
+**Live demo:** https://jayceleonarduo.github.io/python_wasm_consol_poc/
+(served straight from this repo by GitHub Pages)
+
 ## Why
 
 The goal is to prove that an interpreter can be shipped as a static asset:
@@ -57,4 +60,5 @@ directory next to `index.html` and point `loadPyodide({ indexURL: "./pyodide/" }
 
 ## Deploying
 
-Push to GitHub and enable Pages on the `main` branch. That is the entire deployment.
+This repo is deployed with GitHub Pages, source = `main` branch, folder = `/`.
+Every push to `main` redeploys. That is the entire deployment pipeline.
