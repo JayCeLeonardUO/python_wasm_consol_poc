@@ -50,3 +50,14 @@ cross-origin isolation but no JSPI, and works in Chrome and Firefox.
 wasm-objdump -x -j Import python.wasm | grep -c '<- env\.'   # Emscripten host imports
 ./cross-build/wasm32-emscripten/build/python/python.sh -c "import sys; print(sys.platform)"   # emscripten
 ```
+
+## Why scikit-learn is not in this build
+
+`python3.14.zip` is the standard library only. scikit-learn needs numpy, scipy, OpenBLAS and
+Cython extensions compiled for wasm32-emscripten. Pyodide publishes exactly those, but for its
+`pyemscripten_2026_0` ABI: CPython 3.14 built with **Emscripten 5.0.3**, `-fwasm-exceptions`,
+`-sSUPPORT_LONGJMP=wasm`, and Pyodide's own dynamic-library loader with RPATH support. This
+build uses Emscripten 4.0.12 and CPython's stock loader, so those wheels do not load here.
+Matching the ABI would mean rebuilding CPython to Pyodide's spec and cross-compiling the whole
+SciPy stack, which is the Pyodide project itself. The page therefore offers Pyodide 314 as a
+second runtime for sklearn/numpy/pandas and keeps this build as the from-source proof.

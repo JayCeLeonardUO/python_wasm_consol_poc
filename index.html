@@ -9,6 +9,7 @@
         <title>CPython on WebAssembly (self-built)</title>
         <!-- GitHub Pages cannot send COOP/COEP headers; this service worker adds them so SharedArrayBuffer is available. -->
         <script src="coi-serviceworker.js"></script>
+        <link rel="icon" href="data:,">
         <link
             rel="stylesheet"
             href="https://unpkg.com/xterm@4.18.0/css/xterm.css"
@@ -48,6 +49,42 @@
             button {
                 padding: 6px 18px;
             }
+
+            /* ---- runtime switch ---- */
+            #runtime-tabs { display: flex; gap: 4px; margin: 14px 0 18px; border-bottom: 1px solid #ccc; }
+            #runtime-tabs button { background: none; border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px;
+                padding: 8px 12px; font: inherit; font-size: 15px; cursor: pointer; color: #555; }
+            #runtime-tabs button.active { border-bottom-color: #1a73e8; color: #000; font-weight: 600; }
+            #runtime-tabs button:hover { color: #000; }
+            [hidden] { display: none !important; }
+            /* keep the self-built panel measurable (xterm needs layout) while the other tab is shown */
+            .offscreen { position: absolute !important; left: -10000px !important; top: 0; width: 800px; visibility: hidden; }
+            /* ---- Pyodide console panel ---- */
+            #pyodide-console { --bg:#0f1117; --panel:#161a23; --fg:#e6e6e6; --dim:#8b93a7; --prompt:#7ee787; --cont:#d2a8ff; --err:#ff7b72; --accent:#58a6ff; --border:#2a3040;
+                font-family: "JetBrains Mono", "Fira Code", "SF Mono", Menlo, Consolas, monospace; font-size: 14px; line-height: 1.45;
+                background: var(--bg); color: var(--fg); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; height: 62vh; min-height: 380px; }
+            #pyodide-console * { box-sizing: border-box; }
+            #pyodide-console header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+            #pyodide-console header h2 { font-size: 13px; font-weight: 600; margin: 0; }
+            #pyodide-console header h2 span { color: var(--dim); font-weight: 400; }
+            #py-status { color: var(--dim); font-size: 12px; }
+            #py-status.ready { color: var(--prompt); }
+            #py-status.error { color: var(--err); }
+            #py-demo { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 4px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+            #py-demo:disabled { opacity: .4; cursor: default; }
+            #py-term { flex: 1; overflow-y: auto; padding: 10px 14px 20px; white-space: pre-wrap; word-break: break-word; cursor: text; }
+            #py-term .line { min-height: 1.45em; }
+            #py-term .prompt { color: var(--prompt); user-select: none; }
+            #py-term .prompt.cont { color: var(--cont); }
+            #py-term .stderr { color: var(--err); }
+            #py-term .info { color: var(--dim); }
+            #py-term .result { color: var(--accent); }
+            #py-inputrow { display: flex; align-items: flex-start; }
+            #py-input { flex: 1; background: transparent; border: 0; outline: 0; color: var(--fg); font: inherit; padding: 0; margin: 0; resize: none; overflow: hidden; caret-color: var(--fg); }
+            #py-input:disabled { opacity: .5; }
+            #pyodide-console footer { padding: 5px 14px; font-size: 12px; color: var(--dim); background: var(--panel); border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+            #pyodide-console kbd { background: var(--border); border-radius: 3px; padding: 0 4px; font: inherit; font-size: 11px; }
+            .provenance.py { margin-top: 0; }
         </style>
         <script
             src="https://unpkg.com/xterm@4.18.0/lib/xterm.js"
@@ -653,6 +690,10 @@ code.interact(banner=banner, readfunc=_interrupt_aware_input, exitmsg='')
         </script>
     </head>
     <body>
+        <nav id="runtime-tabs" aria-label="Runtime">
+            <button data-runtime="selfbuilt" class="active">Self-built CPython 3.14 · stdlib</button>
+            <button data-runtime="pyodide">Pyodide 314 · CPython 3.14.2 + sklearn, numpy, pandas</button>
+        </nav>
         <div id="repldemo">
             <h1>CPython 3.14 in the browser, built from source</h1>
         <p class="provenance">This is stock CPython 3.14.8 compiled to WebAssembly with Emscripten 4.0.12 using <code>python Platforms/emscripten build</code>. No Pyodide. <code>python.wasm</code> (11&nbsp;MB) and the stdlib zip (3.8&nbsp;MB) are served as static files from this repository. <b>Run code</b> runs the editor as a script and exits; <b>Start REPL</b> gives an interactive session. <a href="BUILD.md">Build notes</a></p>
@@ -676,6 +717,27 @@ code.interact(banner=banner, readfunc=_interrupt_aware_input, exitmsg='')
                 subprocesses, and threading are not available.
             </div>
         </div>
+        <section id="pyodide-console-wrap" hidden>
+            <h1>CPython 3.14.2 + the scientific stack, via Pyodide</h1>
+            <p class="provenance py">Same idea, done by the <a href="https://pyodide.org">Pyodide</a> project: CPython 3.14.2 compiled with Emscripten 5.0.3 plus 356 packages cross-compiled for wasm, loaded from jsDelivr when you open this tab (~13&nbsp;MB, cached). Imports are fetched automatically before a line runs; the first <code>import sklearn</code> pulls ~25&nbsp;MB (mostly scipy). This is <em>not</em> the self-built binary; see <a href="BUILD.md">BUILD.md</a> for why sklearn cannot load into it.</p>
+            <div id="pyodide-console">
+                <header>
+                    <h2>Pyodide console <span>· type Python, or run the demo</span></h2>
+                    <button id="py-demo" disabled>Run sklearn demo</button>
+                    <div id="py-status">Not started</div>
+                </header>
+                <div id="py-term" aria-live="polite">
+                    <div id="py-inputrow">
+                        <span id="py-ps" class="prompt">&gt;&gt;&gt; </span>
+                        <textarea id="py-input" rows="1" autocomplete="off" spellcheck="false" disabled></textarea>
+                    </div>
+                </div>
+                <footer>
+                    <div><kbd>Enter</kbd> run · <kbd>Shift+Enter</kbd> newline · <kbd>↑</kbd>/<kbd>↓</kbd> history · <kbd>Ctrl+L</kbd> clear · <kbd>Ctrl+C</kbd> cancel input</div>
+                    <div id="py-pyver"></div>
+                </footer>
+            </div>
+        </section>
         <div id="buffererror" class="error" style="display: none">
             <p>
                 <code>SharedArrayBuffer</code>, which is required for this demo,
@@ -704,5 +766,229 @@ code.interact(banner=banner, readfunc=_interrupt_aware_input, exitmsg='')
               }
             </script>
         </div>
+
+        <script>
+        // Pyodide 314 runtime location and the canned demo (declared first: the tab code below may boot immediately)
+        const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.5/full/pyodide.js";
+        const SKLEARN_DEMO = [
+            "from sklearn.datasets import load_iris",
+            "from sklearn.model_selection import train_test_split",
+            "from sklearn.linear_model import LogisticRegression",
+            "from sklearn.metrics import classification_report",
+            "X, y = load_iris(return_X_y=True)",
+            "Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=0.3, random_state=0)",
+            "clf = LogisticRegression(max_iter=500).fit(Xtr, ytr)",
+            "print(classification_report(yte, clf.predict(Xte), target_names=load_iris().target_names))",
+        ].join("\n");
+
+        // ---------------- runtime switch ----------------
+        (() => {
+            const tabs = document.querySelectorAll("#runtime-tabs button");
+            const selfbuilt = document.getElementById("repldemo");
+            const pyodidePanel = document.getElementById("pyodide-console-wrap");
+            let pyodideStarted = false;
+            function show(rt) {
+                // self-built panel goes off-screen (not display:none) so xterm keeps its layout
+                selfbuilt.classList.toggle("offscreen", rt !== "selfbuilt");
+                pyodidePanel.hidden = rt !== "pyodide";
+                tabs.forEach((b) => b.classList.toggle("active", b.dataset.runtime === rt));
+                try { localStorage.setItem("runtime", rt); } catch (e) {}
+                if (rt === "pyodide" && !pyodideStarted) { pyodideStarted = true; initPyodideConsole(); }
+                if (rt === "pyodide") document.getElementById("py-input").focus();
+            }
+            tabs.forEach((b) => b.addEventListener("click", () => show(b.dataset.runtime)));
+            const q = new URLSearchParams(location.search).get("runtime");
+            let saved = null; try { saved = localStorage.getItem("runtime"); } catch (e) {}
+            show(q === "pyodide" || q === "selfbuilt" ? q : (saved === "pyodide" ? "pyodide" : "selfbuilt"));
+        })();
+
+        // ---------------- Pyodide 314 console (lazy) ----------------
+
+        async function initPyodideConsole() {
+            const term = document.getElementById("py-term");
+            const inputRow = document.getElementById("py-inputrow");
+            const input = document.getElementById("py-input");
+            const ps = document.getElementById("py-ps");
+            const status = document.getElementById("py-status");
+            const pyver = document.getElementById("py-pyver");
+            const demoBtn = document.getElementById("py-demo");
+
+            // ---- output helpers ----
+            let openLine = null, openCls = null;
+            function write(text, cls) {
+                if (!text) return;
+                openLine = null;
+                const div = document.createElement("div");
+                div.className = "line" + (cls ? " " + cls : "");
+                div.textContent = String(text).replace(/\n$/, "");
+                term.insertBefore(div, inputRow);
+                term.scrollTop = term.scrollHeight;
+            }
+            // chunks without a trailing newline stay on the same line (print(..., end=""))
+            function stream(text, cls) {
+                if (!text) return;
+                const parts = text.split("\n");
+                for (let i = 0; i < parts.length; i++) {
+                    const isLast = i === parts.length - 1;
+                    if (isLast && parts[i] === "") { openLine = null; break; }
+                    if (!openLine || openCls !== (cls || "")) {
+                        openLine = document.createElement("div");
+                        openLine.className = "line" + (cls ? " " + cls : "");
+                        openCls = cls || "";
+                        term.insertBefore(openLine, inputRow);
+                    }
+                    openLine.textContent += parts[i];
+                    if (!isLast) openLine = null;
+                }
+                term.scrollTop = term.scrollHeight;
+            }
+            function echo(promptText, code, isCont) {
+                openLine = null;
+                const div = document.createElement("div");
+                div.className = "line";
+                const p = document.createElement("span");
+                p.className = "prompt" + (isCont ? " cont" : "");
+                p.textContent = promptText;
+                div.appendChild(p);
+                div.appendChild(document.createTextNode(code));
+                term.insertBefore(div, inputRow);
+            }
+            function cleanTraceback(t) { return String(t ?? "").replace(/_IncompleteInputError/g, "SyntaxError"); }
+            function setPrompt(cont) { ps.textContent = cont ? "... " : ">>> "; ps.className = "prompt" + (cont ? " cont" : ""); }
+            function autosize() { input.style.height = "auto"; input.style.height = input.scrollHeight + "px"; }
+            term.addEventListener("click", () => { if (window.getSelection().toString() === "") input.focus(); });
+
+            // ---- load pyodide.js on demand, then boot ----
+            status.textContent = "Downloading Pyodide 314 runtime…";
+            const t0 = performance.now();
+            let pyodide;
+            try {
+                await new Promise((resolve, reject) => {
+                    const sc = document.createElement("script");
+                    sc.src = PYODIDE_URL; sc.onload = resolve;
+                    sc.onerror = () => reject(new Error("could not load " + PYODIDE_URL));
+                    document.head.appendChild(sc);
+                });
+                pyodide = await loadPyodide();
+            } catch (e) {
+                status.textContent = "Failed to load Pyodide"; status.className = "error";
+                write(String(e), "stderr");
+                return;
+            }
+
+            // Pyodide's own REPL machinery: incomplete statements, tracebacks, top-level await.
+            const pyconsole = pyodide.runPython(`
+from pyodide.console import PyodideConsole
+import __main__
+PyodideConsole(__main__.__dict__)
+            `);
+            const banner = pyodide.runPython("from pyodide.console import BANNER; BANNER");
+            // Awaiting a PyProxy future destroys it; await this wrapper instead so the original
+            // future stays alive long enough to read its formatted traceback.
+            const awaitFut = pyodide.runPython(`
+import builtins
+from pyodide.console import repr_shorten
+
+async def _await_fut(fut):
+    res = await fut
+    if res is None:
+        return None
+    builtins._ = res
+    return repr_shorten(res)
+_await_fut
+            `);
+            pyconsole.stdout_callback = (s) => stream(s);
+            pyconsole.stderr_callback = (s) => stream(s, "stderr");
+
+            const version = pyodide.runPython("import sys; sys.version.split()[0]");
+            status.textContent = `Ready · Python ${version} · loaded in ${Math.round(performance.now() - t0)} ms`;
+            status.className = "ready";
+            pyver.textContent = `Pyodide ${pyodide.version} · CPython ${version} · wasm32`;
+
+            write(banner, "info");
+            write("Prebuilt: import numpy, pandas, scipy, sklearn, matplotlib, sympy, ... (downloaded on first import, then cached)", "info");
+            write('Anything pure-Python on PyPI: import micropip; await micropip.install("seaborn")', "info");
+
+            // Optional warm start: ?runtime=pyodide&packages=scikit-learn,pandas
+            const preload = (new URLSearchParams(location.search).get("packages") || "")
+                .split(",").map((x) => x.trim()).filter(Boolean);
+            if (preload.length) {
+                status.textContent = "Loading " + preload.join(", ") + "…";
+                try { await pyodide.loadPackage(preload, { messageCallback: (m) => write(m, "info") }); }
+                catch (e) { write("Package preload failed: " + e, "stderr"); }
+                status.textContent = `Ready · Python ${version} · preloaded ${preload.join(", ")}`;
+            }
+
+            input.disabled = false; demoBtn.disabled = false; input.focus();
+
+            // ---- REPL loop ----
+            const history = []; let histIdx = 0; let busy = false; let inContinuation = false;
+
+            async function submit() {
+                if (busy) return;
+                const code = input.value;
+                input.value = ""; autosize();
+                const lines = code.split("\n");
+                lines.forEach((ln, i) => echo(i === 0 && !inContinuation ? ">>> " : "... ", ln, inContinuation || i > 0));
+                if (code.trim() !== "") history.push(code);
+                histIdx = history.length;
+                busy = true; input.disabled = true; demoBtn.disabled = true;
+                try {
+                    // fetch any Pyodide-distributed packages the code imports before running it
+                    if (/\b(import|from)\b/.test(code)) {
+                        const prev = status.textContent;
+                        try {
+                            await pyodide.loadPackagesFromImports(code, {
+                                messageCallback: (m) => {
+                                    if (/already loaded|No new packages/.test(m)) return;
+                                    status.textContent = m; write(m, "info");
+                                },
+                                errorCallback: (m) => write(m, "stderr"),
+                            });
+                        } catch (e) { write("Package load failed: " + e, "stderr"); }
+                        finally { status.textContent = prev; }
+                    }
+                    for (const ln of lines) {
+                        const fut = pyconsole.push(ln);
+                        const check = fut.syntax_check;
+                        if (check === "incomplete") { inContinuation = true; continue; }
+                        inContinuation = false;
+                        if (check === "syntax-error") { write(cleanTraceback(fut.formatted_error), "stderr"); fut.destroy(); continue; }
+                        const wrapped = awaitFut(fut);
+                        try {
+                            const shown = await wrapped;
+                            if (shown != null) write(shown, "result");
+                        } catch (e) {
+                            if (e.constructor.name === "PythonError") write(cleanTraceback(fut.formatted_error || e.message), "stderr");
+                            else write(String(e), "stderr");
+                        } finally { fut.destroy(); }
+                    }
+                } finally {
+                    busy = false; input.disabled = false; demoBtn.disabled = false;
+                    setPrompt(inContinuation); input.focus(); term.scrollTop = term.scrollHeight;
+                }
+            }
+            function cancelInput() {
+                if (inContinuation) pyconsole.buffer.clear?.();
+                inContinuation = false; input.value = ""; autosize(); setPrompt(false);
+                write("KeyboardInterrupt", "stderr");
+            }
+            demoBtn.addEventListener("click", () => { if (busy) return; input.value = SKLEARN_DEMO; autosize(); submit(); });
+            input.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); }
+                else if (e.key === "ArrowUp" && (input.selectionStart === 0 || !input.value.includes("\n"))) {
+                    if (histIdx > 0) { e.preventDefault(); histIdx--; input.value = history[histIdx]; autosize();
+                        requestAnimationFrame(() => input.setSelectionRange(input.value.length, input.value.length)); }
+                } else if (e.key === "ArrowDown" && (!input.value.includes("\n") || input.selectionStart === input.value.length)) {
+                    if (histIdx < history.length) { e.preventDefault(); histIdx++; input.value = histIdx === history.length ? "" : history[histIdx]; autosize(); }
+                } else if (e.key === "Tab") {
+                    e.preventDefault(); const s0 = input.selectionStart, en = input.selectionEnd;
+                    input.value = input.value.slice(0, s0) + "    " + input.value.slice(en); input.setSelectionRange(s0 + 4, s0 + 4); autosize();
+                } else if (e.key === "l" && e.ctrlKey) { e.preventDefault(); [...term.querySelectorAll(".line")].forEach((n) => n.remove()); }
+                else if (e.key === "c" && e.ctrlKey && window.getSelection().toString() === "") { e.preventDefault(); cancelInput(); }
+            });
+            input.addEventListener("input", autosize);
+        }
+        </script>
     </body>
 </html>
