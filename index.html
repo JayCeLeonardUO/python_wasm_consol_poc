@@ -97,12 +97,12 @@
                     });
                 }
 
-                reset() {
+                reset(message = "Worker process terminated.") {
                     if (this.worker) {
                         this.worker.terminate();
                         this.worker = null;
                     }
-                    this.standardIO.message("Worker process terminated.");
+                    if (message) this.standardIO.message(message);
                     this.initialiseWorker();
                 }
 
@@ -141,7 +141,7 @@
                         });
                     } else if (type === "finished") {
                         this.standardIO.message(
-                            `Exited with status: ${event.data.returnCode}`,
+                            `Finished (exit status ${event.data.returnCode}). Click Run code to run again, or Start REPL for an interactive session.`,
                         );
                         this.finishedCallback();
                     }
@@ -620,7 +620,7 @@ code.interact(banner=banner, readfunc=_interrupt_aware_input, exitmsg='')
 
                 stopButton.addEventListener("click", (e) => {
                     programRunning(false);
-                    pythonWorkerManager.reset();
+                    pythonWorkerManager.reset("Stopped.");
                 });
 
                 clearButton.addEventListener("click", (e) => {
@@ -635,7 +635,7 @@ code.interact(banner=banner, readfunc=_interrupt_aware_input, exitmsg='')
 
                 const finishedCallback = () => {
                     programRunning(false);
-                    pythonWorkerManager.reset();
+                    pythonWorkerManager.reset(null);   // normal finish: no "terminated" message
                 };
 
                 const pythonWorkerManager = new WorkerManager(
